@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import List
+from typing import List, Dict
 
 # Model deps
 from models.linkModel import link_chain
@@ -118,6 +118,7 @@ async def generateCompanySummary(company_url: str):
         section_content[key] = "\n\n".join(value)
 
     # generate sections concurrently as markdown
+    sections = await generateSections(section_content)
 
     generate_sections_elapsed_time = time.time() - generate_sections_start_time
     print(f"[INFO] Generating sections took {generate_sections_elapsed_time} seconds")
@@ -128,6 +129,30 @@ async def generateCompanySummary(company_url: str):
     elapsed_time = time.time() - start_time
     print("[INFO] Total time elapsed: ", elapsed_time)
 
+"""
+    Takes in all the section content and generates the sections concurrently
+    Input: Dict[section_name, section_content]
+    Output: Dict[section_name, section_markdown]
+"""
+async def generateSections(section_content: Dict[str, str]) -> Dict[str, str]:
+    tasks = []
+    for key, value in section_content.items():
+        tasks.append(generateSection(key, value))
+    
+    sections = await asyncio.gather(*tasks)
+    
+    result = {}
+    for section in sections:
+        result[section[0]] = section[1]
+    
+    return result
+        
+"""
+    Returns a list of [section_name, section_markdown]
+"""
+async def generateSection(section_name: str, section_content: str) -> List[str]:
+    
+    
 
 async def summarizePages(pages: List[PageContent]) -> List[PageContent]:
     # ------------ PAGE SUMMARIES --------------
