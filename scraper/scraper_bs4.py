@@ -5,6 +5,7 @@ from typing import Dict, List
 import aiohttp
 from bs4 import BeautifulSoup
 from selenium import webdriver
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -129,26 +130,87 @@ class ScraperBS4(ScraperBaseClass):
             #     )
             print(f"Finding tags for {url}")
 
-            # Find all 'h1', 'h2', 'h3', and 'p' elements
-            elements_h1 = driver.find_elements(By.TAG_NAME, "h1")
-            h1_text = [
-                text for text in [element.text for element in elements_h1] if text != ""
-            ]
+            # Find all 'h1', 'h2', 'h3', 'p', and 'a' elements
+            h1_text = []
+            for i in range(0, 3):
+                try:
+                    elements_h1 = driver.find_elements(By.TAG_NAME, "h1")
+                    h1_text_attempt = [
+                        text
+                        for text in [element.text for element in elements_h1]
+                        if text != ""
+                    ]
+                    h1_text = h1_text_attempt
+                    break
+                except StaleElementReferenceException:
+                    continue
 
-            elements_h2 = driver.find_elements(By.TAG_NAME, "h2")
-            h2_text = [
-                text for text in [element.text for element in elements_h2] if text != ""
-            ]
+            h2_text = []
+            for i in range(0, 3):
+                try:
+                    elements_h2 = driver.find_elements(By.TAG_NAME, "h2")
+                    h2_text_attempt = [
+                        text
+                        for text in [element.text for element in elements_h2]
+                        if text != ""
+                    ]
+                    h2_text = h2_text_attempt
+                    break
+                except StaleElementReferenceException:
+                    print(
+                        f"StaleElementReferenceException occurred in {url}, trying again..."
+                    )
+                    continue
 
-            elements_h3 = driver.find_elements(By.TAG_NAME, "h3")
-            h3_text = [
-                text for text in [element.text for element in elements_h3] if text != ""
-            ]
+            h3_text = []
+            for i in range(0, 3):
+                try:
+                    elements_h3 = driver.find_elements(By.TAG_NAME, "h3")
+                    h3_text_attempt = [
+                        text
+                        for text in [element.text for element in elements_h3]
+                        if text != ""
+                    ]
+                    h3_text = h3_text_attempt
+                    break
+                except StaleElementReferenceException:
+                    print(
+                        f"StaleElementReferenceException occurred in {url}, trying again..."
+                    )
+                    continue
 
-            elements_p = driver.find_elements(By.TAG_NAME, "p")
-            p_text = [
-                text for text in [element.text for element in elements_p] if text != ""
-            ]
+            p_text = []
+            for i in range(0, 3):
+                try:
+                    elements_p = driver.find_elements(By.TAG_NAME, "p")
+                    p_text_attempt = [
+                        text
+                        for text in [element.text for element in elements_p]
+                        if text != ""
+                    ]
+                    p_text = p_text_attempt
+                    break
+                except StaleElementReferenceException:
+                    print(
+                        f"StaleElementReferenceException occurred in {url}, trying again..."
+                    )
+                    continue
+            a_text = []
+            for i in range(0, 3):
+                try:
+                    elements_a = driver.find_elements(By.TAG_NAME, "a")
+                    a_text_attempt = [
+                        text
+                        for text in [element.text for element in elements_a]
+                        if text != ""
+                    ]
+                    a_text = a_text_attempt
+                    break
+                except StaleElementReferenceException:
+                    print(
+                        f"StaleElementReferenceException occurred in {url}, trying again..."
+                    )
+                    continue
 
             print(f"Found tags for {url}")
 
@@ -156,8 +218,9 @@ class ScraperBS4(ScraperBaseClass):
             h2s = "\n".join(h2_text)
             h3s = "\n".join(h3_text)
             ps = "\n".join(p_text)
+            as_ = "\n".join(a_text)
 
-            page_text = f"{h1s}\n{h2s}\n{h3s}\n{ps}"
+            page_text = f"{h1s}\n{h2s}\n{h3s}\n{ps}\n{as_}"
 
             # Construct PageContent object
             page = PageContent()

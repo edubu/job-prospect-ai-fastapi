@@ -1,9 +1,12 @@
 import asyncio
 import time
-from typing import List, Dict
+from typing import Dict, List
+
+from models.cleanupModel import PageCleanup, cleanup_chain
 
 # Model deps
 from models.linkModel import link_chain
+from models.sectionModel import PageSection, section_chain
 from models.summarizeModel import PageSummary, summarize_chain
 
 # Scraper deps
@@ -49,6 +52,9 @@ from scraper.scraper_types import PageContent
 async def generateCompanySummary(company_url: str):
     start_time = time.time()
     # ------------ GETTING ALL VALID LINKS --------------
+    print(f"[INFO] Getting and validating links from {company_url}")
+    validate_links_start_time = time.time()
+
     # create scraper object
     scraper = ScraperBS4()
 
@@ -62,6 +68,11 @@ async def generateCompanySummary(company_url: str):
 
     # Keep all links that return status 200 & filter out duplicates from redirects
     valid_links = await scraper.filterValidLinks(unique_links)
+
+    validate_links_end_time = time.time() - validate_links_start_time
+    print(
+        f"[INFO] Getting and validating links took {validate_links_end_time} seconds with {len(valid_links)} valid links"
+    )
 
     # ------------ PRIORITIZING LINKS TO SCRAPE --------------
     print(f"[INFO] Prioritizing links from {len(valid_links)} links")
@@ -97,7 +108,6 @@ async def generateCompanySummary(company_url: str):
     # Split up content for each sections
     section_labels = [
         "Company Summary",
-        "Company History",
         "Products and Services",
         "Business Model",
         "Target Audience",
@@ -109,50 +119,96 @@ async def generateCompanySummary(company_url: str):
         section_content_lists[section_label] = []
 
     for page in pages_with_summaries:
-        for section in enumerate(page.sections):
-            section_content_lists[section].append("\n".join([page.url, page.summary]))
+        for section in page.sections:
+            if section not in section_labels:
+                continue
+            section_content_lists[section].append("<br>".join([page.url, page.summary]))
 
     # aggregate each sections content
     section_content = {}
     for key, value in section_content_lists.items():
-        section_content[key] = "\n\n".join(value)
+        section_content[key] = "<br><br>".join(value)
 
     # generate sections concurrently as markdown
-    sections = await generateSections(section_content)
+    sections: Dict[str, str] = await generateSections(section_content)
 
     generate_sections_elapsed_time = time.time() - generate_sections_start_time
     print(f"[INFO] Generating sections took {generate_sections_elapsed_time} seconds")
 
     # ------------ DOCUMENT STITCHING --------------
+    print("[INFO] Stitching sections together")
+    stitch_sections_start_time = time.time()
+
+    company_summary_raw = ""
+
+    generated_section_labels = list(sections.keys())
+    for section_label in section_labels:
+        if section_label in generated_section_labels:
+            company_summary_raw += f"<br>{sections[section_label]}<br>"
+
+    # Replace \n with <br>
+    company_summary_raw = company_summary_raw.replace("\n", "<br>")
+
+    stitch_sections_start_time = time.time() - stitch_sections_start_time
+    print(f"[INFO] Stitching sections took {stitch_sections_start_time} seconds")
+
+    # ------------ CLEANUP --------------
+    print("[INFO] Cleaning up markdown")
+    cleanup_start_time = time.time()
+
+    company_summary = await cleanupSummary(company_summary_raw)
+
+    cleanup_end_time = time.time() - cleanup_start_time
+    print(f"[INFO] Cleaning up markdown took {cleanup_end_time} seconds")
 
     # End timer
     elapsed_time = time.time() - start_time
     print("[INFO] Total time elapsed: ", elapsed_time)
+
+    # TODO: Maybe add a cleanup step to make the markdown easier to read
+    return company_summary
+
+
+async def cleanupSummary(company_summary: str) -> str:
+    page_cleanup: PageCleanup = cleanup_chain.run(company_summary=company_summary)
+
+    return page_cleanup.cleaned_content
+
 
 """
     Takes in all the section content and generates the sections concurrently
     Input: Dict[section_name, section_content]
     Output: Dict[section_name, section_markdown]
 """
+
+
 async def generateSections(section_content: Dict[str, str]) -> Dict[str, str]:
     tasks = []
     for key, value in section_content.items():
         tasks.append(generateSection(key, value))
-    
+
     sections = await asyncio.gather(*tasks)
-    
+
     result = {}
     for section in sections:
         result[section[0]] = section[1]
-    
+
     return result
-        
+
+
 """
     Returns a list of [section_name, section_markdown]
 """
+
+
 async def generateSection(section_name: str, section_content: str) -> List[str]:
-    
-    
+    page_section: PageSection = await section_chain.arun(
+        section_name=section_name, page_summaries=section_content
+    )
+    section_markdown = page_section.section
+
+    return [section_name, section_markdown]
+
 
 async def summarizePages(pages: List[PageContent]) -> List[PageContent]:
     # ------------ PAGE SUMMARIES --------------
@@ -166,8 +222,8 @@ async def summarizePages(pages: List[PageContent]) -> List[PageContent]:
 
 
 async def summarizePage(page: PageContent) -> PageContent:
-    pageSummary: PageSummary = summarize_chain.arun(
-        page_url=page.url, page_text=page.text
+    pageSummary: PageSummary = await summarize_chain.arun(
+        page_url=page.url, page_text=page.bodyContent
     )
 
     page.summary = pageSummary.summary

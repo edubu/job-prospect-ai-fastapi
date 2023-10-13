@@ -23,4 +23,4 @@ def test_generate_company_summary():
 
 
 if __name__ == "__main__":
-    test_scraping_links()
+    test_generate_company_summary()

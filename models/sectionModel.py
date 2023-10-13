@@ -1,9 +1,9 @@
 from typing import List
 
-from config import OPENAI_API_KEY
 from langchain.chains import LLMChain
 from langchain.chat_models import ChatOpenAI
-from langchain.output_parsers import PydanticOutputParser
+from langchain.llms import OpenAI
+from langchain.output_parsers import PydanticOutputParser, RetryWithErrorOutputParser
 from langchain.prompts import PromptTemplate
 from langchain.prompts.chat import (
     AIMessagePromptTemplate,
@@ -13,6 +13,8 @@ from langchain.prompts.chat import (
 )
 from langchain.pydantic_v1 import BaseModel, Field
 
+from config import OPENAI_API_KEY
+
 
 # Output data structure
 class PageSection(BaseModel):
@@ -21,21 +23,34 @@ class PageSection(BaseModel):
 
 # output parser
 parser = PydanticOutputParser(pydantic_object=PageSection)
+# retry_parser = RetryWithErrorOutputParser.from_llm(
+#     parser=parser, llm=OpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
+# )
 
 # Prompt Templates
 SECTION_SYSTEM_TEMPLATE = "You are a analyst assistant. You take summaries from web pages and create a detailed section for the company summary."
 SECTION_HUMAN_TEMPLATE = """\
 You are a analyst that writes reports on companies
-You are creating a detailed section for the {section_name} section of the company summary.
+You are creating a concise and detailed section for the {section_name} section of the company summary.
 
 For example, if you are creating a section for the Company History section of the company summary, you will write a detailed section about the company history.
 This section will include details such as when the company was founded, who founded the company, and any other details that are important to the company history.
 
-You will write this section in markdown format.
-You will use any knowledge you currently have about the company, industry, and any other relevant information to write this section.
-Below this are the page summaries that you will use as external sources to write this section.
-{page_summaries}\n\n
-{format_instructions}\n
+Use the following rules when constructing the section:
+- Write everything in markdown format(e.g use <br> instead of \\n)
+- Keep the length of the section to no more than 500 words
+- Any information that can be conveyed in bullet points should be conveyed in bullet points
+- Include "# {section_name}" at the beggining of your answer
+- Use any knowledge you currently have about the company, industry, and other relevant information
+
+I will provide the page summaries that you will use as external sources to write this section.
+
+Page Summaries:\n 
+{page_summaries}
+
+{format_instructions}
+
+Answer: 
 """
 
 # Prompts
@@ -57,7 +72,7 @@ chat_prompt = ChatPromptTemplate.from_messages(
 
 # LlMs
 llm = ChatOpenAI(
-    openai_api_key=OPENAI_API_KEY, model_name="gpt-3.5-turbo-16k", temperature=0.3
+    openai_api_key=OPENAI_API_KEY, model_name="gpt-3.5-turbo-16k", temperature=0
 )
 
 # Chains
